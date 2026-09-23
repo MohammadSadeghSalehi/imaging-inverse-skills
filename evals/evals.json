@@ -175,6 +175,42 @@
       "avoid": [
         "judging it from the MAP image alone"
       ]
+    },
+    {
+      "skill": "inverse-problems",
+      "prompt": "I have a pretrained flow-matching model of brain MRI slices. Use it to reconstruct 4x accelerated single-coil k-space and give me uncertainty.",
+      "expect": [
+        "a flow-matching or diffusion posterior sampler matched to linear A (e.g. PnP-Flow, OT-ODE, DDNM/DDRM-style, or PosteriorDiffusion with FlowMatching)",
+        "several draws for the mean and spread",
+        "each draw's data residual checked against the noise level",
+        "the spread described as uncertainty under the approximate posterior"
+      ],
+      "avoid": [
+        "reporting one draw as the reconstruction without saying so",
+        "calling the spread a calibrated error bar"
+      ]
+    },
+    {
+      "skill": "inverse-problems",
+      "prompt": "I need samples that actually follow the Bayesian posterior for a deblurring problem with a diffusion prior, not just plausible images.",
+      "expect": [
+        "an asymptotically exact sampler: sequential Monte Carlo (twisted diffusion sampler, MCGDiff) or MCMC with the diffusion model as plug-and-play prior (PnP-DM)",
+        "that DPS-style guidance only approximates the posterior"
+      ],
+      "avoid": [
+        "presenting DPS draws as exact posterior samples"
+      ]
+    },
+    {
+      "skill": "inverse-problems",
+      "prompt": "My diffusion-based phase retrieval with DPS gets stuck in bad solutions. What should I try?",
+      "expect": [
+        "DAPS (decoupled annealing) for hard nonlinear problems",
+        "several random starts reported"
+      ],
+      "avoid": [
+        "only increasing the number of sampling steps"
+      ]
     }
   ]
 }

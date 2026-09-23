@@ -23,7 +23,7 @@ Organise the method the way Arridge, Maass, Öktem, and Schönlieb do in their 2
 
 ## Choose the method
 
-Walk down this list and take the first row whose hypothesis you can actually check. If the deliverable is a posterior draw or an uncertainty map, use the diffusion or Langevin row even when an earlier row also matches.
+Walk down this list and take the first row whose hypothesis you can actually check. If the deliverable is a posterior draw or an uncertainty map, use the diffusion, flow-matching, or Langevin row even when an earlier row also matches.
 
 | Situation | Method |
 | --- | --- |
@@ -44,7 +44,7 @@ Walk down this list and take the first row whose hypothesis you can actually che
 | Paired simulated measurements exist and test-time `A` will match training `A` | Unroll a short iteration that still calls `A` and `A*`. Tomography: learned primal-dual (Adler and Öktem). Multi-coil MRI: `VarNet` or `MoDL`. Otherwise unfolded `PGD`, `HQS`, or `ADMM`. Which of these is post-processing rather than an unroll is the unrolled-reconstructions section of `references/communities.md`. |
 | One measurement and no training set | Deep image prior (`dinv.models.DeepImagePrior`). Stop when the residual reaches the noise level. The weights do not transfer. |
 | Only measurements exist | Self-supervised loss from the table in `references/deepinv.md`. Equivariant imaging (`EILoss`; Chen, Tachella, Davies) when a group symmetry of the images is real and `A` breaks it. Measurement splitting when the noise is independent across coordinates. For noisy tomography, split projection angles (Noise2Inverse), not pixels of the reconstruction. SURE when `σ` is known. |
-| The deliverable is a posterior draw or an uncertainty map, and a denoiser trained across noise levels exists | Diffusion posterior sampling. Pick `DDRM`, `DiffPIR`, or `DPS` from the sampling section of `references/deepinv.md`. Average several draws for a mean. |
+| The deliverable is a posterior draw or an uncertainty map, and a diffusion or flow-matching model (or a denoiser trained across noise levels) exists | Diffusion or flow-matching posterior sampling. Pick the method from the decision table in `references/communities.md` by the structure of `A` and by whether the draws must follow the exact posterior; the DeepInverse classes are in `references/deepinv.md`. Average several draws for a mean, and check each draw's data residual. |
 | The deliverable is a posterior draw and the log posterior is an explicit imaging model | Langevin. `ULA` for a short chain. `SKRock` when the posterior is ill-conditioned. MYULA when the potential is convex and nonsmooth. These target a posterior, and MYULA targets its Moreau smoothing; the distinctions are in `references/communities.md`. |
 | A Lipschitz functional should score "looking like data" inside a variational objective | Adversarial regulariser (Lunz, Öktem, Schönlieb). This is a penalty `Ψ_θ(x)`, not a GAN that outputs `x`. |
 

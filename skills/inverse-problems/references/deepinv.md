@@ -134,7 +134,42 @@ Prebuilt diffusion reconstructors, one draw per call:
 | `deepinv.sampling.DiffPIR` | `A` is linear. Denoiser step, then a least-squares data step. |
 | `deepinv.sampling.DPS` | `A` is any differentiable operator, including nonlinear. Backpropagates through the denoiser. |
 
-A custom likelihood score is a `NoisyDataFidelity` inside `deepinv.sampling.PosteriorDiffusion`. The only built-in one in 0.4.2 is `DPSDataFidelity`; any other approximation of the likelihood score (ΠGDM, moment matching) is a `NoisyDataFidelity` subclass you write. The SDE is `VarianceExplodingDiffusion`, `VariancePreservingDiffusion`, `SongDiffusionSDE`, or `EDMDiffusionSDE`, integrated with `EulerSolver` or `HeunSolver`; `FlowMatching` is the flow-matching counterpart. Several draws, and the mean and variance across them, come from `DiffusionSampler`.
+A custom likelihood score is a `NoisyDataFidelity` inside `deepinv.sampling.PosteriorDiffusion`. The only built-in one in 0.4.2 is `DPSDataFidelity`. The DeepInverse main branch adds ΠGDM, moment-matching, annealed-Langevin, score-SDE, and ILVR fidelities after 0.4.2; with 0.4.2, any of these is a `NoisyDataFidelity` subclass you write. The SDE is `VarianceExplodingDiffusion`, `VariancePreservingDiffusion`, `SongDiffusionSDE`, `EDMDiffusionSDE`, or `FlowMatching`, integrated with `EulerSolver` or `HeunSolver`. Several draws, and the mean and variance across them, come from `DiffusionSampler` or from repeated calls with different seeds.
+
+`FlowMatching` takes a denoiser, not a velocity network: for Gaussian paths the two are interchangeable, and DeepInverse converts internally. Its time runs from noise at `t = 1` to data at `t = 0`, the reverse of the convention in the flow-matching papers, so a velocity field trained in that convention must be wrapped before use. `alpha=0` integrates the probability-flow ODE; a positive `alpha` adds noise and turns it into an SDE.
+
+```python
+import numpy as np
+import torch
+import deepinv as dinv
+from deepinv.sampling import DPSDataFidelity, EulerSolver, FlowMatching, PosteriorDiffusion
+
+torch.manual_seed(0)
+x = torch.rand(1, 1, 32, 32)
+physics = dinv.physics.Inpainting(
+    img_size=(1, 32, 32), mask=0.5, noise_model=dinv.physics.GaussianNoise(sigma=0.05)
+)
+y = physics(x)
+
+# Any denoiser trained across noise levels. Load pretrained weights for real use,
+# e.g. DRUNet(pretrained="download"); this small untrained one only checks the wiring.
+denoiser = dinv.models.DRUNet(in_channels=1, out_channels=1, nc=(8, 16, 32, 64), pretrained=None)
+
+timesteps = np.linspace(0.99, 0.0, 20)  # noise at t≈1, data at t=0: the reverse of the FM papers' convention
+sde = FlowMatching(alpha=0.0, device="cpu")  # alpha = 0 gives the probability-flow ODE
+model = PosteriorDiffusion(
+    data_fidelity=DPSDataFidelity(denoiser=denoiser),  # the likelihood-score approximation
+    denoiser=denoiser,
+    sde=sde,
+    solver=EulerSolver(timesteps=timesteps, rng=torch.Generator().manual_seed(0)),
+    dtype=torch.float32,
+    device="cpu",
+)
+draws = torch.stack([model(y, physics, seed=s) for s in range(3)])  # one call is one draw
+mean, std = draws.mean(0), draws.std(0)  # posterior mean and spread need several draws
+```
+
+Which likelihood approximation and which method to choose, and what each output is, is the diffusion and flow-matching section of `communities.md`.
 
 MCMC holds the noise level fixed. Build it with `deepinv.sampling.sampling_builder(iterator="ULA"` or `"SKRock"`, `prior`, `data_fidelity`, `params_algo`, `max_iter)`. `ULA` takes `step_size`, `alpha`, `sigma`. `SKRock` adds `inner_iter` and `eta`. The prior is `ScorePrior` for a denoiser score, or an explicit potential. `ULA` is Euler-Maruyama and unadjusted. `SKRock` is the stabilised discretisation. Neither is a proximal-gradient optimiser, and neither applies the step `1/‖A‖²` from the algorithms reference.
 

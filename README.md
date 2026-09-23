@@ -27,7 +27,7 @@ General-purpose agents write imaging code that runs and is wrong. These are mist
 | Skill | It decides |
 | --- | --- |
 | [`computational-imaging`](skills/computational-imaging/SKILL.md) | The forward operator, the noise likelihood, the sampling design, the adjoint test, the null space, and how to evaluate without ground truth |
-| [`inverse-problems`](skills/inverse-problems/SKILL.md) | The reconstructor: variational regularisation, plug-and-play and RED, unrolled and learned primal-dual networks, learned convex regularisers, self-supervised training, deep image prior, diffusion and Langevin sampling, impedance and optical tomography, off-the-grid sparse recovery, imperfect and learned forward operators, the choice of `λ`, and uncertainty reporting, including hypothesis tests and multilevel Monte Carlo |
+| [`inverse-problems`](skills/inverse-problems/SKILL.md) | The reconstructor: variational regularisation, plug-and-play and RED, unrolled and learned primal-dual networks, learned convex regularisers, self-supervised training, deep image prior, diffusion and flow-matching posterior sampling (DPS, DDRM, DDNM, ΠGDM, DAPS, latent diffusion, sequential Monte Carlo, PnP-Flow, OT-ODE, D-Flow), Langevin sampling, impedance and optical tomography, off-the-grid sparse recovery, imperfect and learned forward operators, the choice of `λ`, and uncertainty reporting, including hypothesis tests and multilevel Monte Carlo |
 | [`imaging-optimisation`](skills/imaging-optimisation/SKILL.md) | The solver and its step: proximal gradient, FISTA, ADMM, Chambolle–Pock, Condat–Vũ, variable-metric and majorise–minimise methods, stochastic and block-coordinate methods, multilevel optimisation, EM for Poisson data, early stopping, and bilevel learning, including which hypergradient to compute and adaptively inexact methods (MAID) |
 
 They refer to each other as sibling folders, so install all three. An agent loads a skill when the task matches its description, and reads the reference files only when it needs them.
@@ -56,6 +56,7 @@ After installing, ask your agent:
 - "Learn the TV weight from 20 paired CT scans. Which hypergradient should I use?"
 - "I only have noisy CT projections. How do I train a denoiser?"
 - "Localise single fluorescent molecules from a blurred microscope frame."
+- "Use my pretrained flow-matching model as a prior for undersampled MRI and give me uncertainty."
 
 `evals/evals.json` lists these and more, with the behaviour to expect and the mistakes to avoid, for comparing an agent with and without the skills.
 
@@ -87,6 +88,8 @@ The skills cite more than a hundred papers, each next to the method it justifies
 - Kaipio, Somersalo. *Statistical and Computational Inverse Problems*. Springer, 2005.
 - Combettes, Pesquet. Proximal splitting methods in signal processing. In *Fixed-Point Algorithms for Inverse Problems in Science and Engineering*, Springer, 2011. doi:[10.1007/978-1-4419-9569-8_10](https://doi.org/10.1007/978-1-4419-9569-8_10)
 - Peyré, Cuturi. Computational optimal transport. *Foundations and Trends in Machine Learning*, 2019. doi:[10.1561/2200000073](https://doi.org/10.1561/2200000073)
+- Daras and coauthors. A survey on diffusion models for inverse problems. arXiv:[2410.00083](https://arxiv.org/abs/2410.00083), 2024.
+- Lipman, Chen, Ben-Hamu, Nickel, Le. Flow matching for generative modeling. *ICLR*, 2023.
 - Giles. Multilevel Monte Carlo methods. *Acta Numerica*, 2015. doi:[10.1017/S096249291500001X](https://doi.org/10.1017/S096249291500001X)
 - Crockett, Fessler. Bilevel methods for image reconstruction. *Foundations and Trends in Signal Processing*, 2022. doi:[10.1561/2000000111](https://doi.org/10.1561/2000000111)
 - Salehi, Mukherjee, Roberts, Ehrhardt. An adaptively inexact first-order method for bilevel optimization with application to hyperparameter learning. *SIAM Journal on Mathematics of Data Science*, 2025. doi:[10.1137/24M1653513](https://doi.org/10.1137/24M1653513)
