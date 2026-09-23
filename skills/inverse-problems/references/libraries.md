@@ -17,9 +17,10 @@ GPU projectors and the classical iterative algorithms. Cite van Aarle, Palenstij
 
 ## CIL
 
-The Core Imaging Library wraps that projector in an optimisation object. Cite Jørgensen and coauthors, "Core Imaging Library — Part I", Philosophical Transactions of the Royal Society A, 2021, doi:10.1098/rsta.2020.0192. Acquisition and image containers describe the scan. The usual convex solve is least squares or Kullback–Leibler plus a regulariser:
+The Core Imaging Library wraps that projector in an optimisation object. Cite Jørgensen and coauthors, "Core Imaging Library, Part I", Philosophical Transactions of the Royal Society A, 2021, doi:10.1098/rsta.2020.0192. Acquisition and image containers describe the scan. The usual convex solve is least squares or Kullback–Leibler plus a regulariser:
 
 ```python
+# fragment: needs CIL and a scan's image_geometry, acquisition_geometry, and data
 from cil.plugins.astra.operators import ProjectionOperator
 from cil.optimisation.functions import LeastSquares, TotalVariation
 from cil.optimisation.algorithms import FISTA

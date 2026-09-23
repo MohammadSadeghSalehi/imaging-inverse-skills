@@ -7,27 +7,29 @@ Install: `pip install deepinv` (Python 3.10+). Optional extras: `pip install "de
 Every reconstructor subclasses `deepinv.models.Reconstructor` and maps `(y, physics)` to `x_hat`.
 
 ```python
-import deepinv as dinv
 import torch
+import deepinv as dinv
 
+torch.manual_seed(0)
+x = torch.rand(1, 1, 32, 32)
 physics = dinv.physics.Inpainting(
-    (1, 512, 512), mask=0.5, noise_model=dinv.physics.GaussianNoise(sigma=0.01)
+    img_size=(1, 32, 32), mask=0.5, noise_model=dinv.physics.GaussianNoise(sigma=0.01)
 )
-data_fidelity = dinv.optim.L2()
-prior = dinv.optim.PnP(denoiser=dinv.models.MedianFilter())
-norm_A2 = physics.compute_norm(y, tol=1e-4, verbose=False).item()
+y = physics(x)
+
+L = float(physics.compute_sqnorm(x, verbose=False))  # batched, shaped like x
 model = dinv.optim.PGD(
-    prior=prior,
-    data_fidelity=data_fidelity,
-    stepsize=0.99 / norm_A2,
+    prior=dinv.optim.PnP(denoiser=dinv.models.MedianFilter()),
+    data_fidelity=dinv.optim.L2(),
+    stepsize=0.9 / L,
     lambda_reg=0.1,
     sigma_denoiser=0.1,
-    max_iter=100,
+    max_iter=20,
 )
 x_hat = model(y, physics)
 ```
 
-`compute_norm` estimates `||A||^2` by power iteration. Use it before choosing a step. The legal step for each algorithm is in the imaging-optimisation reference.
+`compute_sqnorm(x)` estimates `‖A‖²` by power iteration. Pass a batched tensor shaped like the image; a measurement-shaped tensor fails on tomography, and an unbatched one fails on MRI despite the docstring. The estimate undershoots at the default tolerance, so keep a margin in the step. `compute_norm` is the older name and returns the squared norm by default with a deprecation warning. The legal step for each algorithm is in the imaging-optimisation reference.
 
 ## Data fidelity
 
@@ -64,11 +66,15 @@ x_hat = model(y, physics)
 
 Prebuilt iterative methods: `DPIR` (plug-and-play with a decreasing noise schedule), `EPLL`.
 
+Denoisers and pretrained models in `deepinv.models`: `DRUNet` and `DnCNN` (the usual plug-and-play denoisers), `GSDRUNet` (gradient-step denoiser, for the convergent plug-and-play hypothesis of Hurault and coauthors), `SCUNet`, `Restormer`, `SwinIR`, `BM3D`, `TVDenoiser`, `TGVDenoiser`, `WaveletDenoiser`. `RAM` is a pretrained reconstructor called as `RAM()(y, physics)`. `DeepImagePrior` wraps an untrained generator. Unrolled MRI models: `VarNet`, `MoDL`. Learned primal-dual: `PDNet`, built from `PDNet_PrimalBlock` and `PDNet_DualBlock`.
+
 ## Unfolding
 
 Pass `unfold=True` and `trainable_params` (any of `stepsize`, `lambda_reg`, `sigma_denoiser`, and the denoiser weights) to `PGD`, `HQS`, `ADMM`, and the other `BaseOptim` solvers. Keep `max_iter` small and fixed.
 
 ```python
+import deepinv as dinv
+
 model = dinv.optim.PGD(
     unfold=True,
     data_fidelity=dinv.optim.L2(),
@@ -91,7 +97,7 @@ Deep equilibrium is available for `GD`, `PGD`, and `HQS` by passing `DEQ` as a `
 
 Supervised: `deepinv.loss.SupLoss` with a distortion metric, on paired `(x, y)`.
 
-Self-supervised, from measurements alone:
+Self-supervised, from measurements alone. The `mri.` rows live in `deepinv.loss.mri`:
 
 | Loss | Requires |
 | --- | --- |
@@ -128,12 +134,14 @@ Prebuilt diffusion reconstructors, one draw per call:
 | `deepinv.sampling.DiffPIR` | `A` is linear. Denoiser step, then a least-squares data step. |
 | `deepinv.sampling.DPS` | `A` is any differentiable operator, including nonlinear. Backpropagates through the denoiser. |
 
-A custom likelihood score is a `NoisyDataFidelity` inside `deepinv.sampling.PosteriorDiffusion`: `DPSDataFidelity`, `PiGDMDataFidelity` (linear Gaussian noise), `MomentMatchingDataFidelity`, `ALDDataFidelity` (no backward through the denoiser), `ScoreSDEDataFidelity`, `ILVRDataFidelity`. The SDE is `VarianceExplodingDiffusion` or `VariancePreservingDiffusion`, integrated with `EulerSolver` or `HeunSolver`. Several draws, and the mean and variance across them, come from `DiffusionSampler`.
+A custom likelihood score is a `NoisyDataFidelity` inside `deepinv.sampling.PosteriorDiffusion`. The only built-in one in 0.4.2 is `DPSDataFidelity`; any other approximation of the likelihood score (ΠGDM, moment matching) is a `NoisyDataFidelity` subclass you write. The SDE is `VarianceExplodingDiffusion`, `VariancePreservingDiffusion`, `SongDiffusionSDE`, or `EDMDiffusionSDE`, integrated with `EulerSolver` or `HeunSolver`; `FlowMatching` is the flow-matching counterpart. Several draws, and the mean and variance across them, come from `DiffusionSampler`.
 
 MCMC holds the noise level fixed. Build it with `deepinv.sampling.sampling_builder(iterator="ULA"` or `"SKRock"`, `prior`, `data_fidelity`, `params_algo`, `max_iter)`. `ULA` takes `step_size`, `alpha`, `sigma`. `SKRock` adds `inner_iter` and `eta`. The prior is `ScorePrior` for a denoiser score, or an explicit potential. `ULA` is Euler-Maruyama and unadjusted. `SKRock` is the stabilised discretisation. Neither is a proximal-gradient optimiser, and neither applies the step `1/‖A‖²` from the algorithms reference.
 
 ## Training loop
 
-Use `deepinv.Trainer` when the installed version provides it. Read `Trainer.__init__` in the installed package and pass `model`, `physics`, `optimizer`, `losses`, and the dataloaders by those names. Docs: https://deepinv.org/user_guide/training/trainer.html
+Use `deepinv.Trainer`. Read `Trainer.__init__` in the installed package and pass `model`, `physics`, `optimizer`, `losses`, and the dataloaders by those names. Docs: https://deepinv.org/user_guide/training/trainer.html
+
+Metrics are `dinv.metric.PSNR`, `SSIM`, `LPIPS`, `NMSE`, and the no-reference `NIQE` and `BRISQUE`. A no-reference score is not evidence of fidelity to the measured object.
 
 Pretrained reconstructors and denoisers are listed at https://deepinv.org/user_guide/reconstruction/pretrained-models.html and https://deepinv.org/user_guide/reconstruction/denoisers.html. Load one before training a new network for a standard denoising or MRI problem.

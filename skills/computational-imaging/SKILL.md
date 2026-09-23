@@ -1,16 +1,15 @@
 ---
 name: computational-imaging
 description: >
-  Formulate, simulate, and evaluate a computational imaging system whose
-  measurements are not the image: MRI, CT, PET, ultrasound, phase retrieval,
-  ptychography, spectral imaging, deblurring, inpainting, and compressed
-  sensing. Covers forward operators, noise, sampling design, structural
-  priors, and null-space evaluation, from the variational line and from
-  sparse MRI, compressed sensing, and designable optics (Lustig, Candès,
-  Bouman, Fessler, Waller, Wetzstein). Implemented in deepinv. Use when
-  the user says computational imaging, forward model, k-space, tomography,
-  compressed sensing, diffuse optical tomography, electrical impedance
-  tomography, measurement operator, or runs /computational-imaging.
+  Write and check the measurement model of a computational imaging system
+  before reconstructing: forward operator, noise likelihood, sampling or
+  mask design, null space, adjoint test, and evaluation against the noise
+  level. Covers MRI and k-space, CT and tomography, PET, deblurring,
+  inpainting, super-resolution, phase retrieval, ptychography, spectral
+  imaging, compressed sensing, and single-pixel imaging, implemented in
+  DeepInverse, ASTRA, or CIL. Use when the user builds or debugs a forward
+  model, simulates measurements, picks a noise model or sampling pattern,
+  checks an adjoint, or evaluates a reconstruction without ground truth.
 ---
 
 # Computational imaging
@@ -29,6 +28,8 @@ Who those names refer to, and which paper to cite, is in `../inverse-problems/re
 3. Name the null space of `A`. That is the part of `x` the measurements do not determine.
 4. Hand the pair `(A, N)` to the inverse-problems skill for the reconstructor. Come back here to judge the result.
 5. Evaluate the data residual against the noise level, and evaluate the null-space error separately from the row-space error.
+
+Before step 4, test the adjoint of any linear operator you wrote or wrapped (`physics.adjointness_test(x)` should be at floating-point precision). A wrong adjoint breaks every gradient and primal-dual step silently.
 
 ## Modelling rules
 
@@ -50,22 +51,30 @@ If the lens, the coded aperture, or the illumination can be changed, those param
 - With ground truth and linear `A`, split the error into the row space of `A` and the null space. Quote both.
 - Without ground truth, score held-out measurements (left-out k-space lines, a left-out projection angle).
 - Stability probe: reconstruct `y` and `y + δ` and report `‖x(y) - x(y+δ)‖ / ‖δ‖`.
-- PSNR and SSIM are distortion scores. Say so when the method was built to produce a posterior sample instead of a conditional mean.
+- Model error: if `A` is an approximation (coarse mesh, calibrated geometry, assumed coil maps), a residual far above the noise level on a good reconstruction points to `A`, not the prior. The approximation-error model in `../inverse-problems/references/communities.md` is the principled fix.
+- PSNR and SSIM are distortion scores (`dinv.metric.PSNR`, `dinv.metric.SSIM`). Say so when the method was built to produce a posterior sample instead of a conditional mean.
 
 ## Implementation
 
 Prefer `deepinv` over a handwritten Fourier mask or Radon transform. Confirm every class against the installed package; the reference records the 0.4.2 names.
 
 ```python
+import torch
 import deepinv as dinv
 
+torch.manual_seed(0)
+mask = dinv.physics.generator.GaussianMaskGenerator(img_size=(64, 64), acceleration=4).step()["mask"]
 physics = dinv.physics.MRI(
-    mask=mask,  # (H, W) or broadcastable to (B, 2, H, W)
+    mask=mask,
+    img_size=(64, 64),  # spatial size, not a batched shape
     noise_model=dinv.physics.GaussianNoise(sigma=0.01),
 )
-y = physics(x)            # x is (B, 2, H, W): real, then imaginary
-z = physics.A(x)          # noiseless forward map
-x0 = physics.A_dagger(y)  # least-squares start
+x = torch.rand(1, 2, 64, 64)  # complex image as two channels: real, then imaginary
+y = physics(x)                # one noisy measurement
+x0 = physics.A_dagger(y)      # least-squares start
+
+# <A u, v> = <u, A* v> must hold before any solver uses A_adjoint.
+assert abs(float(physics.adjointness_test(x))) < 1e-3
 ```
 
-`img_size` on `MRI` is the spatial size, default `(320, 320)`. It is not a batched tensor shape. Simulate a small batch, check the shape of `y`, and check `A_adjoint` against `<A x, y> ≈ <x, A* y>` before trusting a reconstruction.
+`img_size` on `MRI` is the spatial size, default `(320, 320)`. It is not a batched tensor shape. Simulate a small batch and check the shape of `y` before trusting a reconstruction.
