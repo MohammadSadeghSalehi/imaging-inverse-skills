@@ -86,3 +86,24 @@ def test_certified_hypergradient_matches_finite_difference() -> None:
     theta = torch.tensor(-4.0, dtype=torch.float64, requires_grad=True)
     hg, _, _ = ns["hypergradient"](theta, 1e-3, ns["physics"].A_adjoint(ns["y"]))
     assert hg == pytest.approx(fd, rel=1e-3)
+
+
+def test_condat_vu_example_reaches_the_proximal_gradient_optimum() -> None:
+    """algorithms.md: the Condat–Vũ example, without the constraint, matches PGD on the same objective."""
+    import re
+    from pathlib import Path
+
+    text = (Path(__file__).resolve().parents[1] / "skills/imaging-optimisation/references/algorithms.md").read_text()
+    code = next(c for c in re.findall(r"```python\n(.*?)```", text, re.S) if "def condat_vu" in c)
+    ns: dict = {}
+    exec(code, ns)
+    physics, y, tv, lam = ns["physics"], ns["y"], ns["tv"], 0.02
+    f = dinv.optim.L2()
+
+    def objective(z):
+        return float(f(z, y, physics).sum() + lam * tv.fn(z).sum())
+
+    L = float(physics.compute_sqnorm(physics.A_adjoint(y), tol=1e-6, verbose=False))
+    ref = objective(dinv.optim.PGD(prior=tv, data_fidelity=f, stepsize=1 / L, lambda_reg=lam, max_iter=400)(y, physics))
+    got = objective(ns["condat_vu"](y, physics, lam, iters=2000, nonneg=False))
+    assert got == pytest.approx(ref, rel=1e-3)

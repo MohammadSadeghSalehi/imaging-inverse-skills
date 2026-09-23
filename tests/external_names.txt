@@ -19,3 +19,5 @@ SART
 TotalVariation
 A_adjoint
 A_dagger
+# Maths expressions written in backticks
+Kx

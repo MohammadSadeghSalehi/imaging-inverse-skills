@@ -4,62 +4,177 @@
     {
       "skill": "computational-imaging",
       "prompt": "I have PET sinogram counts and a scanner model. Set up the reconstruction problem in DeepInverse.",
-      "expect": ["Poisson likelihood (PoissonLikelihood) as the data term", "nonnegativity of the image", "MLEM or OSEM as the baseline"],
-      "avoid": ["a squared L2 data term on the raw counts", "BSREM"]
+      "expect": [
+        "Poisson likelihood (PoissonLikelihood) as the data term",
+        "nonnegativity of the image",
+        "MLEM or OSEM as the baseline"
+      ],
+      "avoid": [
+        "a squared L2 data term on the raw counts",
+        "BSREM"
+      ]
     },
     {
       "skill": "computational-imaging",
       "prompt": "I wrote my own forward operator for a structured-illumination microscope as a LinearPhysics subclass. What should I check before using it?",
-      "expect": ["an adjoint test such as physics.adjointness_test", "the null space of A", "a noise model matched to the detector"],
-      "avoid": ["training a network before checking the operator"]
+      "expect": [
+        "an adjoint test such as physics.adjointness_test",
+        "the null space of A",
+        "a noise model matched to the detector"
+      ],
+      "avoid": [
+        "training a network before checking the operator"
+      ]
     },
     {
       "skill": "imaging-optimisation",
       "prompt": "Write a Chambolle-Pock solver in DeepInverse for TV-regularised deblurring.",
-      "expect": ["PDCP with K=physics.A called with an identity physics, or the default K with the real physics", "an explicit check that tau*sigma*||K||^2 < 1", "the norm estimated from an image-shaped tensor"],
-      "avoid": ["PDCP(K=physics.A) called with the blur physics", "claiming PDCP enforces the step condition"]
+      "expect": [
+        "PDCP with K=physics.A called with an identity physics, or the default K with the real physics",
+        "an explicit check that tau*sigma*||K||^2 < 1",
+        "the norm estimated from an image-shaped tensor"
+      ],
+      "avoid": [
+        "PDCP(K=physics.A) called with the blur physics",
+        "claiming PDCP enforces the step condition"
+      ]
     },
     {
       "skill": "imaging-optimisation",
       "prompt": "My proximal gradient reconstruction diverges. I use stepsize = 1 / physics.compute_norm(y).",
-      "expect": ["estimate the norm on an image-shaped tensor, not y", "step below 2/L, with a margin because the power iteration undershoots"],
-      "avoid": ["only lowering the step without explaining the norm estimate"]
+      "expect": [
+        "estimate the norm on an image-shaped tensor, not y",
+        "step below 2/L, with a margin because the power iteration undershoots"
+      ],
+      "avoid": [
+        "only lowering the step without explaining the norm estimate"
+      ]
     },
     {
       "skill": "imaging-optimisation",
       "prompt": "I want to learn the TV weight lambda from 20 paired CT scans.",
-      "expect": ["bilevel learning", "a nonsmooth lower level means differentiating a fixed number of primal-dual iterations, or smoothing and saying so", "that fixed-iteration unrolling is not a claim about the exact minimiser"],
-      "avoid": ["grid search presented as the only option"]
+      "expect": [
+        "bilevel learning",
+        "a nonsmooth lower level means differentiating a fixed number of primal-dual iterations, or smoothing and saying so",
+        "that fixed-iteration unrolling is not a claim about the exact minimiser"
+      ],
+      "avoid": [
+        "grid search presented as the only option"
+      ]
     },
     {
       "skill": "inverse-problems",
       "prompt": "I plugged a pretrained DRUNet into PnP-ADMM for my deblurring problem. Can I say the algorithm converges?",
-      "expect": ["one of the three hypotheses: firmly nonexpansive denoiser, contractive residual, or gradient-step denoiser", "a stock DRUNet satisfies none of them without checking", "report an empirical fixed point otherwise"],
-      "avoid": ["an unconditional convergence claim"]
+      "expect": [
+        "one of the hypotheses: firmly nonexpansive denoiser, contractive residual, gradient-step denoiser, or resolvent of a maximally monotone operator",
+        "a stock DRUNet satisfies none of them without checking",
+        "report an empirical fixed point otherwise"
+      ],
+      "avoid": [
+        "an unconditional convergence claim"
+      ]
     },
     {
       "skill": "inverse-problems",
       "prompt": "I only have noisy CT projections, no clean images. How do I train a denoiser?",
-      "expect": ["split projection angles (Noise2Inverse)", "independent zero-mean noise across the split"],
-      "avoid": ["Neighbor2Neighbor on reconstructed pixels"]
+      "expect": [
+        "split projection angles (Noise2Inverse)",
+        "independent zero-mean noise across the split"
+      ],
+      "avoid": [
+        "Neighbor2Neighbor on reconstructed pixels"
+      ]
     },
     {
       "skill": "inverse-problems",
       "prompt": "How should I choose the regularisation weight for Tikhonov deblurring? I know the noise level.",
-      "expect": ["discrepancy principle", "SURE", "report lambda and the rule that chose it"],
-      "avoid": ["tuning lambda by looking at PSNR against ground truth the user does not have"]
+      "expect": [
+        "discrepancy principle",
+        "SURE",
+        "report lambda and the rule that chose it"
+      ],
+      "avoid": [
+        "tuning lambda by looking at PSNR against ground truth the user does not have"
+      ]
     },
     {
       "skill": "inverse-problems",
       "prompt": "I ran a diffusion posterior sampler 20 times. Can I report the pixelwise standard deviation as an error bar?",
-      "expect": ["it is uncertainty under the model, not a calibrated error bar", "check empirical coverage on held-out ground truth"],
-      "avoid": ["presenting the spread as a confidence interval without checking"]
+      "expect": [
+        "it is uncertainty under the model, not a calibrated error bar",
+        "check empirical coverage on held-out ground truth"
+      ],
+      "avoid": [
+        "presenting the spread as a confidence interval without checking"
+      ]
     },
     {
       "skill": "inverse-problems",
       "prompt": "Reconstruct conductivity from electrical impedance tomography boundary data using a U-Net.",
-      "expect": ["the forward map is nonlinear", "a regularised D-bar or Bayesian baseline first"],
-      "avoid": ["treating EIT as image inpainting"]
+      "expect": [
+        "the forward map is nonlinear",
+        "a regularised D-bar or Bayesian baseline first"
+      ],
+      "avoid": [
+        "treating EIT as image inpainting"
+      ]
+    },
+    {
+      "skill": "inverse-problems",
+      "prompt": "I want to localise single fluorescent molecules from a blurred, noisy microscope frame. Should I run TV or L1 on a fine pixel grid?",
+      "expect": [
+        "off-the-grid sparse recovery (BLASSO)",
+        "sliding Frank-Wolfe as the solver",
+        "a separation condition between sources"
+      ],
+      "avoid": [
+        "an L1 prior on a fine pixel grid presented as unbiased in position"
+      ]
+    },
+    {
+      "skill": "inverse-problems",
+      "prompt": "My blur kernel is only known approximately. Should I just increase the noise level in the data term?",
+      "expect": [
+        "operator error is modelled separately from noise",
+        "approximation-error model or imperfect-operator variational regularisation (Korolev and coauthors)"
+      ],
+      "avoid": [
+        "inflating sigma as the fix"
+      ]
+    },
+    {
+      "skill": "imaging-optimisation",
+      "prompt": "Solve least-squares deblurring with TV and a nonnegativity constraint without inner prox loops.",
+      "expect": [
+        "Condat-Vu, using the gradient of the data term",
+        "step condition 1/tau - sigma*||K||^2 > L/2"
+      ],
+      "avoid": [
+        "a nested iterative prox of the data term inside every step"
+      ]
+    },
+    {
+      "skill": "inverse-problems",
+      "prompt": "I need the posterior mean and variance for an EIT problem where each forward solve is an expensive finite-element PDE solve.",
+      "expect": [
+        "multilevel Monte Carlo or multilevel MCMC across mesh levels",
+        "check that the correction variances decay across levels",
+        "a discretisation-invariant prior"
+      ],
+      "avoid": [
+        "single-level MCMC on the finest mesh presented as the only option"
+      ]
+    },
+    {
+      "skill": "inverse-problems",
+      "prompt": "The MAP reconstruction of my PET scan shows a small hot spot. Is it real?",
+      "expect": [
+        "a Bayesian hypothesis test by convex optimisation (BUQO), or posterior sampling",
+        "the structure is tested, not the whole image"
+      ],
+      "avoid": [
+        "judging it from the MAP image alone"
+      ]
     }
   ]
 }

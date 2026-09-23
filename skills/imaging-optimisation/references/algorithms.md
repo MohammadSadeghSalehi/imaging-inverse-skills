@@ -30,6 +30,8 @@ Estimate norms numerically. For a deepinv linear physics, `physics.compute_sqnor
 | Adaptive SPDHG | Keep the product of the adapted steps inside the 2018 regime. Chambolle, Delplancke, Ehrhardt, Schönlieb, Tang, JMIV 2024. | Use when the primal/dual ratio is not known. Demonstrated on CT. |
 | Chambolle 2004 dual TV | Projected gradient on the dual ball, step `τ ≤ 1/8` for the standard 2D forward-difference gradient (`‖div‖² ≤ 8`). | Convergence for the ROF problem. |
 | iPiano | Inertial proximal step on smooth nonconvex plus prox-friendly nonsmooth. Ochs, Chen, Brox, and Pock, SIAM Journal on Imaging Sciences, 2014. | Convergence to a critical point under that paper's step and inertia restrictions. |
+| Condat–Vũ primal-dual | Smooth `f` with `L`-Lipschitz gradient, prox-friendly `g`, and `h(Kx)`: `1/τ − σ‖K‖² > L/2`. Condat, Journal of Optimization Theory and Applications 158(2), 2013, doi:10.1007/s10957-012-0245-9; Vũ, Advances in Computational Mathematics 38(3), 2013, doi:10.1007/s10444-011-9254-8. | Convergence of the iterates for convex `f`, `g`, `h`. |
+| Variable-metric forward-backward | Step inside a metric `P` that majorises the smooth term, for example a diagonal or majorise–minimise preconditioner. Chouzenoux, Pesquet, Repetti, Journal of Optimization Theory and Applications 162(1), 2014, doi:10.1007/s10957-013-0465-7. | Convergence to a critical point for nonconvex `f` and `g` under the Kurdyka–Łojasiewicz property. |
 | PDHG with a weakly convex regulariser | Shumaylov, Budd, Mukherjee, Schönlieb, ICML 2024. | Convergence of the iterates to a critical point, and an ergodic rate under a Kurdyka–Łojasiewicz condition. |
 
 Diagonal preconditioning (Pock and Chambolle, "Diagonal preconditioning for first order primal-dual algorithms") replaces the scalar steps by diagonal matrices built from the absolute row and column sums of `K`, so the same product condition holds mode-wise. Use it for optical flow, multi-term TV, and any `K` whose rows have very different scales.
@@ -49,6 +51,10 @@ Diagonal preconditioning (Pock and Chambolle, "Diagonal preconditioning for firs
 | Tomography with diagonal weights | Simultaneous iterative reconstruction | `SIRT` |
 | Mirror map / Bregman geometry (simplex, positive orthant) | Mirror descent | `MD`, `PMD` |
 | Poisson deconvolution, known kernel | Richardson–Lucy, which is MLEM on a blur operator | `MLEM` with a `Blur` physics |
+| Smooth data term, a prox-friendly constraint, and a nonsmooth term on `Kx` (TV plus nonnegativity) | Condat–Vũ: gradient on `f`, prox on `g`, dual prox on `h` | none in 0.4.2; the example below |
+| A smooth term whose curvature varies strongly across the image, or a nonconvex penalty | Variable-metric forward-backward, majorise–minimise | none; see the section below |
+| Very many unknowns, updated a block at a time | Random block-coordinate proximal iteration | none |
+| A fine grid with a natural coarse version (large images, 3D) | Multilevel forward-backward or FISTA | none; see the section below |
 
 `PDCP` is the library's Chambolle–Pock iteration, dual update first:
 
@@ -61,6 +67,66 @@ z <- x + β (x - x_prev)
 Pass `stepsize` as `τ`, `stepsize_dual` as `σ`, and `beta` as the extrapolation. Set `beta=1` to recover the over-relaxed form the 2011 convergence proof uses.
 
 Bregman potentials for mirror descent: `BregmanL2`, `BurgEntropy` (positive intensities), `NegEntropy` (simplex), `Bregman_ICNN` (a learned convex mirror map, `deepinv.models.ICNN`).
+
+## Primal-dual with a smooth term: Condat–Vũ
+
+`PDCP` treats every term through a prox. When the data term is smooth, as `½‖Ax − y‖²` is, Condat–Vũ uses its gradient instead, so no prox of the data term and no linear solve is needed, and a third, prox-friendly term such as a nonnegativity constraint comes for free. The iteration for `min_x f(x) + g(x) + h(Kx)` is
+
+```
+x⁺ = prox_{τg}(x − τ(∇f(x) + Kᵀu))
+u⁺ = prox_{σh*}(u + σK(2x⁺ − x))
+```
+
+with the step condition in the table above. DeepInverse 0.4.2 has no class for it; it is a few lines around `TVPrior.nabla`. The example solves TV deblurring with a nonnegativity constraint. With the constraint switched off it reaches the proximal-gradient optimum of the same objective to six significant figures.
+
+```python
+import torch
+import deepinv as dinv
+
+torch.manual_seed(0)
+x_true = torch.rand(1, 1, 32, 32)
+physics = dinv.physics.BlurFFT(
+    img_size=(1, 32, 32),
+    filter=dinv.physics.blur.gaussian_blur(sigma=1.5),
+    noise_model=dinv.physics.GaussianNoise(sigma=0.02),
+)
+y = physics(x_true)
+tv = dinv.optim.TVPrior()  # K = tv.nabla, the finite-difference gradient, with ‖K‖² ≤ 8
+
+
+def condat_vu(y, physics, lam, iters=500, nonneg=True):
+    """min_x ½‖Ax − y‖² + lam ‖Kx‖_{1,2} + ι_{x ≥ 0}(x): smooth term by its gradient, TV through K."""
+    beta = float(physics.compute_sqnorm(physics.A_adjoint(y), tol=1e-6, verbose=False))  # ‖A‖², image-shaped input
+    sigma, norm_K2 = 1.0, 8.0
+    tau = 0.99 / (beta / 2 + sigma * norm_K2)  # Condat's condition: 1/tau − sigma‖K‖² > beta/2
+    x = physics.A_adjoint(y)
+    u = torch.zeros_like(tv.nabla(x))
+    for _ in range(iters):
+        grad_f = physics.A_adjoint(physics.A(x) - y)
+        x_new = x - tau * (grad_f + tv.nabla_adjoint(u))
+        if nonneg:
+            x_new = x_new.clamp(min=0)  # prox of the nonnegativity indicator
+        v = u + sigma * tv.nabla(2 * x_new - x)
+        u = v / torch.clamp(v.norm(dim=-1, keepdim=True) / lam, min=1.0)  # prox of (lam‖·‖_{1,2})*: projection
+        x = x_new
+    return x
+
+
+x_hat = condat_vu(y, physics, lam=0.02)
+assert x_hat.min() >= 0
+```
+
+## Variable metrics and majorise–minimise
+
+A scalar step wastes iterations when the curvature of the data term differs by orders of magnitude across pixels (Poisson data, PET, spatially varying blur). Variable-metric forward-backward replaces the scalar step by a preconditioner that majorises the smooth term, and keeps convergence to a critical point even for nonconvex terms: Chouzenoux, Pesquet, and Repetti 2014 above, and its block-coordinate form, Chouzenoux, Pesquet, and Repetti, Journal of Global Optimization 66(3), 2016, doi:10.1007/s10898-016-0405-9. When the nonsmooth term is a sum of concave functions of convex ones (log-sum and other edge-preserving penalties) and its prox has no closed form, the C2FB algorithm handles it through a majorise–minimise step: Repetti and Wiaux, SIAM Journal on Optimization 31(2), 2021, doi:10.1137/19M1277552. The majorise–minimise subspace method for image restoration is Chouzenoux, Idier, and Moussaoui, IEEE Transactions on Image Processing 20(6), 2011, doi:10.1109/TIP.2010.2103083. For very many unknowns, update random blocks: Combettes and Pesquet, "Stochastic Quasi-Fejér Block-Coordinate Fixed Point Iterations with Random Sweeping", SIAM Journal on Optimization 25(2), 2015, doi:10.1137/140971233, which covers the block versions of forward-backward and primal-dual methods.
+
+## Multilevel optimisation
+
+A large image has a coarse version on which iterations are cheap. Multilevel methods alternate fine proximal steps with corrections computed on coarser grids. Parpas, "A Multilevel Proximal Gradient Algorithm for a Class of Composite Optimization Problems", SIAM Journal on Scientific Computing 39(5), 2017, doi:10.1137/16M1082299. For imaging, IML FISTA builds the coarse corrections from Moreau envelopes, allows inexact proximal steps, and proves the convergence rate and the convergence of the iterates in the convex case: Lauga, Riccietti, Pustelnik, and Gonçalves, SIAM Journal on Imaging Sciences 17(3), 2024, doi:10.1137/23M1582345. Report the fine-level objective; a coarse-level decrease is not a fine-level certificate.
+
+## Structure, identification, and acceleration
+
+Proximal methods on sparse, low-rank, or TV-type problems identify the active structure (the support, the rank, the jump set) in finitely many iterations under partial smoothness, and then converge linearly: Liang, Fadili, and Peyré, "Activity Identification and Local Linear Convergence of Forward–Backward-type Methods", SIAM Journal on Optimization 27(1), 2017, doi:10.1137/16M106340X. So a slow start followed by fast convergence is expected, and a plateau at a wrong support is a sign that `λ` is wrong, not that the solver failed. The trajectory of ADMM can be extrapolated for acceleration where plain inertia fails (Poon and Liang, "Trajectory of Alternating Direction Method of Multipliers and Adaptive Acceleration", NeurIPS 2019). A different route to the same nonsmooth problems replaces them by a smooth nonconvex over-parametrisation, generalising the quadratic variational forms behind iteratively reweighted least squares, eliminates part of the variables by variable projection, and solves the result with quasi-Newton methods and no prox, including for TV: Poon and Peyré, "Smooth over-parameterized solvers for non-smooth structured optimization", Mathematical Programming 201, 2023, doi:10.1007/s10107-022-01923-3.
 
 ## Total variation and TGV
 
@@ -158,6 +224,8 @@ The hypergradient of `ℓ(x(θ))` is where bilevel learning spends its compute, 
 | Same, and no Hessian-vector products are available | Derivative-free bilevel with inexact lower-level solves: Ehrhardt and Roberts, "Inexact Derivative-Free Optimization for Bilevel Learning", Journal of Mathematical Imaging and Vision 63(5), 2021, doi:10.1007/s10851-021-01020-8 | Convergence for a small number of parameters; the cost grows with the dimension of `θ`. |
 | Many training pairs, sampled in minibatches | Inexact stochastic hypergradients (below), or stocBiO (Ji, Yang, Liang, "Bilevel Optimization: Convergence Analysis and Enhanced Design", ICML 2021). Warm-start the inner solve and the linear system across outer steps (Arbel and Mairal, "Amortized Implicit Differentiation for Stochastic Bilevel Optimization", ICLR 2022). | Convergence in expectation to a stationary point, at the rate the schedule supports. |
 | Convex but nonsmooth, solved by a primal-dual method, learning an operator or a convex regulariser | Piggyback primal-dual differentiation with an a posteriori bound (below). For a general nonsmooth solution map, conservative Jacobians (Bolte, Le, Pauwels, Silveti-Falls, "Nonsmooth Implicit Differentiation for Machine Learning and Optimization", NeurIPS 2021). | A hypergradient whose error is bounded by the computed tolerances. |
+| A sparse or group-sparse regression whose structure you want to learn | Smooth bilevel reformulation of iteratively reweighted least squares (Poon and Peyré, "Smooth Bilevel Programming for Sparse Regularization", NeurIPS 2021) | The lasso-type solution, from a smooth problem with no support pruning. |
+| No clean data, Gaussian noise of known level, several parameters | Gradient of Stein's unbiased risk estimate with respect to the parameters: SUGAR (Deledalle, Vaiter, Fadili, Peyré, SIAM Journal on Imaging Sciences 7(4), 2014, doi:10.1137/140968045) | Parameters that minimise an unbiased estimate of the risk, not of the true error on one image. |
 | A fixed-point network (deep equilibrium) | Implicit differentiation of the fixed point (Bai, Kolter, Koltun, "Deep Equilibrium Models", NeurIPS 2019; imaging: Gilton, Ongie, Willett, IEEE Transactions on Computational Imaging 7, 2021, doi:10.1109/TCI.2021.3118944). Jacobian-free backpropagation drops the inverse (Fung and coauthors, AAAI 2022). | With the Jacobian-free shortcut, a descent direction under that paper's conditions, not the hypergradient. |
 
 How large the hypergradient error is, for each of these estimators, is analysed in Ehrhardt and Roberts, "Analyzing inexact hypergradients for bilevel learning", IMA Journal of Applied Mathematics 89(1), 2024, doi:10.1093/imamat/hxad035. A fixed small number of inner iterations gives a biased hypergradient with no descent guarantee on the upper loss; say so if that is what you ran.
