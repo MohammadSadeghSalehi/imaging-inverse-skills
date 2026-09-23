@@ -5,9 +5,10 @@ description: >
   objective and set its step sizes: proximal gradient, FISTA, ADMM,
   Chambolle-Pock primal-dual (PDHG), stochastic and adaptive PDHG,
   preconditioning, total variation, total generalised variation, and
-  bilevel parameter learning. Use when the user asks for optimisation or
-  optimization of an imaging or inverse-problem objective, a proximal map,
-  a step size, PDHG, SPDHG, plug-and-play convergence, RED, or runs
+  bilevel parameter learning, and iterative regularisation by early
+  stopping. Use when the user asks for optimisation or optimization of an
+  imaging objective, a proximal map, a step size, PDHG, SPDHG, iPiano,
+  nonsmooth bilevel learning, plug-and-play convergence, RED, or runs
   /imaging-optimisation.
 ---
 
@@ -35,16 +36,17 @@ This skill covers continuous optimisation for imaging, in the sense of Chambolle
 - Squared fidelity plus TV only: Chambolle's 2004 dual projection, with the step bound in the algorithms reference. General `A`: proximal gradient on `TVPrior`, or `PDCP` with `K` equal to `A`.
 - TV staircasing on ramps: move to second-order TGV and solve the saddle point. The definition is in the algorithms reference.
 - Poisson counts and a nonnegative image: `MLEM`, `OSEM`, or `BSREM`, or a Bregman geometry (`BurgEntropy`) rather than an L2 gradient step on the raw counts.
+- The unknown is a PDE coefficient: penalty formulation in the PDE-constrained section of `../inverse-problems/references/communities.md`. The reduced adjoint-state objective is the one with the local minima. Subset tomography with an explicit convex objective is CIL's `SPDHG`, under the stochastic PDHG step-size row. The library choice is `../inverse-problems/references/libraries.md`.
 - Nonconvex smooth term plus a prox: iPiano, inside the paper's step and inertia bounds (Ochs, Chen, Brox, Pock).
 - Weakly convex learned regulariser: stay inside the modulus assumed by Goujon, Neumayer, and Unser, or by Shumaylov, Budd, Mukherjee, and Schönlieb for PDHG. The objective is then handled as weakly convex, and the claim is critical-point convergence.
 - The data term is a long sum and a denoiser replaces the prox: one subset of measurements per data step (online plug-and-play). The convergence claim is still one of the three hypotheses in `../inverse-problems/references/communities.md`.
-- Landweber, iterated Tikhonov, or a deep image prior: these are semi-convergent. Stop when the residual reaches the noise level. Running to a tiny residual fits noise. The discrepancy principle is in the Italian section of `../inverse-problems/references/communities.md`.
+- Landweber, iterated Tikhonov, dual diagonal descent, or a deep image prior: these are semi-convergent. The iteration count is the regularisation parameter. Stop when the residual reaches the noise level. Dual diagonal descent and its inertial form cover a general convex penalty and a Kullback–Leibler fidelity; an inexact prox keeps the rate only under the error control in the iterative-regularisation section of `../inverse-problems/references/communities.md`.
 
 Plug-and-play keeps the data-term step of proximal gradient, HQS, ADMM, or Douglas-Rachford and replaces the prox. RED replaces the prior gradient by `x - D(x)`. Quote a convergence or "this is a prior gradient" claim only under the matching hypothesis in `../inverse-problems/references/communities.md`. Langevin and diffusion samplers are not rows of this skill. A total-variation density inside a sampler is not discretization-invariant; deterministic `TVPrior` minimisation is a different estimator.
 
 ## Bilevel parameters
 
-`λ`, a Fields-of-Experts filter bank, or a sampling mask is an outer variable. The inner problem stays the variational reconstruction. Implement the derivative by unrolling (`unfold=True`, `trainable_params` in deepinv) or by the implicit-function route (`DEQConfig` on `GD`, `PGD`, or `HQS`). A variational network is this construction with learned filters and learned activations in each gradient step.
+`λ`, a Fields-of-Experts filter bank, or a sampling mask is an outer variable. The inner problem stays the variational reconstruction. If that inner problem is nonsmooth, differentiate a fixed run of primal-dual iterations (Ochs, Ranftl, Brox, Pock); the procedure is in `references/algorithms.md`. If it is smooth, unroll it (`unfold=True`, `trainable_params`) or use the implicit-function route (`DEQConfig` on `GD`, `PGD`, or `HQS`).
 
 ## Implementation
 

@@ -29,7 +29,7 @@ Estimate norms numerically. For a deepinv linear physics, `physics.compute_norm(
 | SPDHG | Per-block condition from Chambolle, Ehrhardt, Richtárik, Schönlieb, SIAM J. Optim. 2018. Serial sampling uses the block probabilities `p_i` and the block norms `‖K_i‖`. Applying the PDHG product condition to the full stacked operator is sufficient and looser than the block condition. | Same convex saddle-point guarantee, with subset updates. |
 | Adaptive SPDHG | Keep the product of the adapted steps inside the 2018 regime. Chambolle, Delplancke, Ehrhardt, Schönlieb, Tang, JMIV 2024. | Use when the primal/dual ratio is not known. Demonstrated on CT. |
 | Chambolle 2004 dual TV | Projected gradient on the dual ball, step `τ ≤ 1/8` for the standard 2D forward-difference gradient (`‖div‖² ≤ 8`). | Convergence for the ROF problem. |
-| iPiano | Inertial proximal step on smooth nonconvex plus prox-friendly nonsmooth. Ochs, Chen, Brox, Pock. | Convergence to a critical point under the paper's step and inertia restrictions. |
+| iPiano | Inertial proximal step on smooth nonconvex plus prox-friendly nonsmooth. Ochs, Chen, Brox, and Pock, SIAM Journal on Imaging Sciences, 2014. | Convergence to a critical point under that paper's step and inertia restrictions. |
 | PDHG with a weakly convex regulariser | Shumaylov, Budd, Mukherjee, Schönlieb, ICML 2024. | Convergence of the iterates to a critical point, and an ergodic rate under a Kurdyka–Łojasiewicz condition. |
 
 Diagonal preconditioning (Pock and Chambolle, "Diagonal preconditioning for first order primal-dual algorithms") replaces the scalar steps by diagonal matrices built from the absolute row and column sums of `K`, so the same product condition holds mode-wise. Use it for optical flow, multi-term TV, and any `K` whose rows have very different scales.
@@ -97,10 +97,14 @@ Learning `λ`, a filter bank, or a sampling mask is the outer problem
 min_θ  ℓ(x(θ), x_ref)   subject to   x(θ) = argmin_x f(x; y) + R(x; θ)
 ```
 
-Two implementations that stay faithful to this formulation:
+When the lower-level problem is nonsmooth, as total variation is, the solution map is not a gradient you can write down. Ochs, Ranftl, Brox, and Pock, "Techniques for Gradient-Based Bilevel Optimization with Non-smooth Lower Level Problems", Journal of Mathematical Imaging and Vision, 2016: replace the minimiser by a differentiable iterative algorithm (a Bregman proximal or primal-dual map) and differentiate those iterations. The parameters are then optimal for that fixed iteration count, which is an unroll, not a claim about the infinite-iteration minimiser. Smoothing the lower level and differentiating the smoothed problem solves the smoothed problem. Say which one you did.
 
-- Unroll a fixed number of the inner algorithm and differentiate through it. In deepinv, `unfold=True` and `trainable_params`. This is the variational-network construction (Hammernik, Pock and coauthors) when each step is a gradient step on a Fields-of-Experts energy with learned filters and learned scalar activations.
-- Implicit differentiation of the optimality condition, when the inner solver runs to convergence. In deepinv this is the deep-equilibrium path, `DEQConfig`, on `GD`, `PGD`, or `HQS`.
+A nonsmooth nonconvex penalty, such as an `ℓᵖ` penalty with `p < 1` on the gradient, is the iteratively reweighted scheme of Ochs, Dosovitskiy, Brox, and Pock, SIAM Journal on Imaging Sciences, 2015. The convex primal-dual rate does not apply. iPiano, in the table above, is the inertial proximal step for smooth nonconvex plus a prox.
+
+Two implementations that stay faithful to a smooth or prox-friendly lower level:
+
+- Unroll a fixed number of the inner algorithm and differentiate through it. In deepinv, `unfold=True` and `trainable_params`. This is the variational-network construction (Hammernik, Pock, and coauthors) when each step is a gradient step on a Fields-of-Experts energy. The tomography form, with both proximal maps learned, is the learned primal-dual in `../../inverse-problems/references/communities.md`.
+- Implicit differentiation of the optimality condition, when the inner solver runs to convergence and the optimality condition is differentiable. In deepinv this is the deep-equilibrium path, `DEQConfig`, on `GD`, `PGD`, or `HQS`.
 
 Keep the inner problem convex, or weakly convex with a convergent algorithm, if the learned parameter is going to be reused at test time inside that same algorithm. An outer loss alone does not make an arbitrary unrolled network a minimiser of the variational model.
 

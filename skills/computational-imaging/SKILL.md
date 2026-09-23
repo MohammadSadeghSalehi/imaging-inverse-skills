@@ -20,12 +20,12 @@ Write the measurement model before any network. The reconstruction method is cho
 - `../inverse-problems/SKILL.md`
 - `../imaging-optimisation/SKILL.md`
 
-Who those names refer to, and which paper to cite, is in `../inverse-problems/references/lineage.md`. Operator and noise class names are in `references/forward-models.md` next to this file. The Arridge, Finnish, and Italian modelling rules are in `../inverse-problems/references/communities.md`.
+Who those names refer to, and which paper to cite, is in `../inverse-problems/references/lineage.md`. Operator and noise class names are in `references/forward-models.md` next to this file. Optical tomography, statistical inversion, spectral filtering, and PDE-constrained coefficients are in `../inverse-problems/references/communities.md`. DeepInverse, ASTRA, CIL, and LION are chosen in `../inverse-problems/references/libraries.md`.
 
 ## Procedure
 
 1. Write `y = N(A(x))` with the domain of `x` (pixel image, nonnegative activity, complex coil images) and of `y`.
-2. Implement `A` as a `deepinv.physics` operator. Attach `N` as the matching noise model from the reference. If the operator is missing, subclass `Physics` or `LinearPhysics`.
+2. Choose the library from `../inverse-problems/references/libraries.md`. In DeepInverse, implement `A` as a `deepinv.physics` operator and attach `N` from `references/forward-models.md`. A measured tomography geometry uses ASTRA or CIL. If the operator is missing from all four libraries, subclass `Physics` or `LinearPhysics`.
 3. Name the null space of `A`. That is the part of `x` the measurements do not determine.
 4. Hand the pair `(A, N)` to the inverse-problems skill for the reconstructor. Come back here to judge the result.
 5. Evaluate the data residual against the noise level, and evaluate the null-space error separately from the row-space error.

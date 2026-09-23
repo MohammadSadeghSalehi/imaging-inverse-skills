@@ -8,7 +8,7 @@ Three agent skills for computational imaging. They tell an agent how to write th
 | `inverse-problems` | Variational regularisation, plug-and-play, RED, unrolling, equivariant imaging, diffusion, Langevin, deep image prior, diffuse optical tomography, electrical impedance tomography |
 | `imaging-optimisation` | Proximal gradient, FISTA, ADMM, Chambolle–Pock, stochastic PDHG, discrepancy stopping |
 
-The citations cover the Cambridge–Bath–Graz–Paris variational line, plug-and-play and diffusion, DeepInverse, Simon Arridge's optical tomography, the Finnish statistical inverse-problems school (Kaipio, Somersalo, Siltanen, Lassas), and the Italian imaging school (Bertero, Boccacci, Donatelli, Serra-Capizzano, Estatico, Calvetti). They are agent instructions distilled from those sources. They are not a survey, and they are not endorsed by the authors.
+The citations cover variational imaging, plug-and-play, diffusion, statistical inversion, impedance tomography, limited-angle X-ray, PDE-constrained coefficients, and measured tomography. The implementation choice is DeepInverse, ASTRA, CIL, or LION, in `skills/inverse-problems/references/libraries.md`. These are agent instructions distilled from those sources. They are not a survey, and they are not endorsed by the authors.
 
 Install all three. They refer to each other as sibling directories, which is how `npx skills` lays them out.
 

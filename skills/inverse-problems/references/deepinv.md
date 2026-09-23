@@ -81,7 +81,7 @@ model = dinv.optim.PGD(
 )
 ```
 
-MRI-specific unrolled models: `deepinv.models.VarNet`, `deepinv.models.MoDL`. Primal-dual network blocks: `PDNet_PrimalBlock`, `PDNet_DualBlock`.
+MRI-specific unrolled models: `deepinv.models.VarNet`, `deepinv.models.MoDL`. Primal-dual network blocks: `PDNet_PrimalBlock`, `PDNet_DualBlock`, the learned primal-dual of Adler and Öktem. When to unroll rather than post-process is the unrolled-reconstructions section of `communities.md`.
 
 For HQS or ADMM, construct linear physics with `implicit_backward_solver=True` so the least-squares prox does not store every inner iteration on the backward pass. Raise that inner `max_iter` until the prox has actually converged, because the closed-form gradient assumes a minimiser.
 
