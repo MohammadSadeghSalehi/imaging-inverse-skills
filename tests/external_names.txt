@@ -1,0 +1,21 @@
+# Backticked names in the skills that are not DeepInverse symbols: ASTRA, CIL, LION,
+# other libraries, method names, and variables. The symbol test ignores these.
+# One name per line.
+CGLS
+DEQ
+DIP
+FBPConvNet
+K_adjoint
+KullbackLeibler
+LeastSquares
+LG
+LPD
+Noise2Inverse
+Noise2Inverse_solver
+PDHG
+ProjectionOperator
+SPDHG
+SART
+TotalVariation
+A_adjoint
+A_dagger

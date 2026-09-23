@@ -1,0 +1,29 @@
+name: check
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"  # weekly, to catch drift in new DeepInverse releases
+
+jobs:
+  skills:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        deepinv: ["0.4.2", "latest"]
+    # The pinned version is the contract; a failure on the latest release is a warning to update.
+    continue-on-error: ${{ matrix.deepinv == 'latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          if [ "${{ matrix.deepinv }}" = "latest" ]; then pip install deepinv; else pip install "deepinv==${{ matrix.deepinv }}"; fi
+          pip install pytest
+      - name: Test
+        run: python -m pytest tests -q -W ignore
