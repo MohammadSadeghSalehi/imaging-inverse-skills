@@ -22,7 +22,7 @@ jobs:
           python-version: "3.12"
       - name: Install
         run: |
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           if [ "${{ matrix.deepinv }}" = "latest" ]; then pip install deepinv; else pip install "deepinv==${{ matrix.deepinv }}"; fi
           pip install pytest
       - name: Test
