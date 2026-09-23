@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If these skills help your work, please cite the repository and the papers behind the method you used."
+title: "Imaging inverse problems: agent skills"
+abstract: "Agent skills that choose a measurement model, a reconstructor, and a convergent solver for imaging inverse problems, using DeepInverse, ASTRA, CIL, and LION."
+type: software
+authors:
+  - family-names: Salehi
+    given-names: Mohammad Sadegh
+repository-code: "https://github.com/MohammadSadeghSalehi/imaging-inverse-skills"
+license: MIT
+keywords:
+  - agent skills
+  - inverse problems
+  - computational imaging
+  - bilevel learning
+  - DeepInverse

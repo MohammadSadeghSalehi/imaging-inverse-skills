@@ -64,3 +64,25 @@ def test_mlem_with_prior_runs_as_one_step_late() -> None:
     out = dinv.optim.MLEM(data_fidelity=dinv.optim.PoissonLikelihood(), prior=dinv.optim.Tikhonov(),
                           lambda_reg=0.01, max_iter=5)(y, physics)
     assert out.min() >= 0
+
+
+def test_certified_hypergradient_matches_finite_difference() -> None:
+    """algorithms.md: the MAID example's hypergradient converges to a finite difference."""
+    import re
+    from pathlib import Path
+
+    text = (Path(__file__).resolve().parents[1] / "skills/imaging-optimisation/references/algorithms.md").read_text()
+    code = next(c for c in re.findall(r"```python\n(.*?)```", text, re.S) if "def hypergradient" in c)
+    ns: dict = {}
+    exec(code.split("theta = torch.tensor")[0], ns)
+
+    def upper(th: float) -> float:
+        th = torch.tensor(th, dtype=torch.float64)
+        x = ns["solve_lower"](th, 1e-9, ns["physics"].A_adjoint(ns["y"]))
+        return float(0.5 * (x - ns["x_true"]).pow(2).sum())
+
+    d = 1e-4
+    fd = (upper(-4.0 + d) - upper(-4.0 - d)) / (2 * d)
+    theta = torch.tensor(-4.0, dtype=torch.float64, requires_grad=True)
+    hg, _, _ = ns["hypergradient"](theta, 1e-3, ns["physics"].A_adjoint(ns["y"]))
+    assert hg == pytest.approx(fd, rel=1e-3)

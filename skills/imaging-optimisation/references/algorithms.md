@@ -146,7 +146,93 @@ Two implementations that stay faithful to a smooth or prox-friendly lower level:
 
 Keep the inner problem convex, or weakly convex with a convergent algorithm, if the learned parameter is going to be reused at test time inside that same algorithm. An outer loss alone does not make an arbitrary unrolled network a minimiser of the variational model.
 
-Inexact hypergradients. The implicit route needs the lower-level minimiser and the solution of a linear system in the Hessian, and both are computed only approximately. A fixed small number of inner iterations gives a biased hypergradient with no descent guarantee on the outer loss. When the lower level is smooth and strongly convex, the distance to its minimiser is certified a posteriori by `‖x − x*‖ ≤ ‖∇ₓh(x)‖ / μ`, and the hypergradient error can be bounded from that and from the residual of the conjugate-gradient solve. The method of adaptive inexact descent (MAID) sets both tolerances from those bounds, tightens them only when a backtracking line search on the outer loss fails, and so keeps a sufficient-decrease guarantee while spending little lower-level work early on: Salehi, Mukherjee, Roberts, and Ehrhardt, "An Adaptively Inexact First-Order Method for Bilevel Optimization with Application to Hyperparameter Learning", SIAM Journal on Mathematics of Data Science 7(3), 2025, doi:10.1137/24M1653513. Use it when the lower-level solve dominates the cost of learning `λ`, filters, or the parameters of a convex regulariser. It does not apply to a nonsmooth lower level; that is the unrolling case above.
+### Choosing the hypergradient method
+
+The hypergradient of `ℓ(x(θ))` is where bilevel learning spends its compute, and each way of computing it supports a different claim. Survey for imaging: Crockett and Fessler, "Bilevel Methods for Image Reconstruction", Foundations and Trends in Signal Processing 15(2–3), 2022, doi:10.1561/2000000111. The variational-model form is Kunisch and Pock, "A Bilevel Optimization Approach for Parameter Learning in Variational Models", SIAM Journal on Imaging Sciences 6(2), 2013, doi:10.1137/120882706.
+
+| Lower level, and what you have | Hypergradient | What you may claim |
+| --- | --- | --- |
+| Nonsmooth, or you will deploy a fixed number of iterations | Iterative differentiation: unroll `K` steps and backpropagate (Franceschi, Donini, Frasconi, Pontil, ICML 2017; Ochs, Ranftl, Brox, Pock above for nonsmooth steps) | Parameters optimal for that `K`-step algorithm, not for the minimiser. |
+| Smooth and strongly convex, solved to convergence | Implicit differentiation: solve `∇²ₓₓh q = ∇ₓℓ` by conjugate gradient, then `−∇²_θₓh q` | The exact hypergradient in the limit. Grazzi, Franceschi, Pontil, Salzo, "On the Iteration Complexity of Hypergradient Computation", ICML 2020, give rates for both this and the unrolled route in the number of inner iterations. |
+| Same, and the lower-level solve dominates the cost | Adaptively inexact implicit differentiation: MAID (below). The fixed-schedule predecessor is HOAG, which drives the tolerances down along a summable sequence (Pedregosa, "Hyperparameter optimization with approximate gradient", ICML 2016). | Sufficient decrease on the upper loss under the paper's assumptions, without a hand-tuned tolerance schedule. |
+| Same, and no Hessian-vector products are available | Derivative-free bilevel with inexact lower-level solves: Ehrhardt and Roberts, "Inexact Derivative-Free Optimization for Bilevel Learning", Journal of Mathematical Imaging and Vision 63(5), 2021, doi:10.1007/s10851-021-01020-8 | Convergence for a small number of parameters; the cost grows with the dimension of `θ`. |
+| Many training pairs, sampled in minibatches | Inexact stochastic hypergradients (below), or stocBiO (Ji, Yang, Liang, "Bilevel Optimization: Convergence Analysis and Enhanced Design", ICML 2021). Warm-start the inner solve and the linear system across outer steps (Arbel and Mairal, "Amortized Implicit Differentiation for Stochastic Bilevel Optimization", ICLR 2022). | Convergence in expectation to a stationary point, at the rate the schedule supports. |
+| Convex but nonsmooth, solved by a primal-dual method, learning an operator or a convex regulariser | Piggyback primal-dual differentiation with an a posteriori bound (below). For a general nonsmooth solution map, conservative Jacobians (Bolte, Le, Pauwels, Silveti-Falls, "Nonsmooth Implicit Differentiation for Machine Learning and Optimization", NeurIPS 2021). | A hypergradient whose error is bounded by the computed tolerances. |
+| A fixed-point network (deep equilibrium) | Implicit differentiation of the fixed point (Bai, Kolter, Koltun, "Deep Equilibrium Models", NeurIPS 2019; imaging: Gilton, Ongie, Willett, IEEE Transactions on Computational Imaging 7, 2021, doi:10.1109/TCI.2021.3118944). Jacobian-free backpropagation drops the inverse (Fung and coauthors, AAAI 2022). | With the Jacobian-free shortcut, a descent direction under that paper's conditions, not the hypergradient. |
+
+How large the hypergradient error is, for each of these estimators, is analysed in Ehrhardt and Roberts, "Analyzing inexact hypergradients for bilevel learning", IMA Journal of Applied Mathematics 89(1), 2024, doi:10.1093/imamat/hxad035. A fixed small number of inner iterations gives a biased hypergradient with no descent guarantee on the upper loss; say so if that is what you ran.
+
+### Adaptively inexact hypergradients (MAID)
+
+When the lower level is smooth and `μ`-strongly convex, the distance to its minimiser is certified a posteriori, `‖x − x*‖ ≤ ‖∇ₓh(x)‖ / μ`, and the conjugate-gradient residual is computable, so the hypergradient error can be bounded from quantities the code already has. The method of adaptive inexact descent (MAID) sets the lower-level and linear-solve tolerances from those bounds, runs a backtracking line search on the upper loss that accounts for the inexactness, and tightens the tolerances only when that line search fails. Early outer steps are therefore cheap, and accuracy is bought only when progress needs it. Salehi, Mukherjee, Roberts, and Ehrhardt, "An Adaptively Inexact First-Order Method for Bilevel Optimization with Application to Hyperparameter Learning", SIAM Journal on Mathematics of Data Science 7(3), 2025, doi:10.1137/24M1653513.
+
+The same group extends the idea in three directions:
+
+- Stochastic upper level, where the sampling of training pairs makes the hypergradient inexact and stochastic: convergence under mild assumptions, with speed-ups and better generalisation than adaptive deterministic methods on denoising and deblurring. Salehi, Mukherjee, Roberts, and Ehrhardt, "Bilevel Learning with Inexact Stochastic Gradients", Scale Space and Variational Methods in Computer Vision (SSVM 2025), doi:10.1007/978-3-031-92366-1_27.
+- Rates for inexact stochastic gradient descent under decaying accuracy and step-size schedules, `O(k^{-1/4})` in expectation with the best configuration. Their experiments, with convex-ridge regularisers and input-convex networks, find the accuracy schedule matters more than the step-size schedule. Salehi, Mukherjee, Roberts, and Ehrhardt, "Bilevel Learning via Inexact Stochastic Gradient Descent", arXiv:2511.06774, 2025.
+- Nonsmooth convex lower levels solved by primal-dual: the piggyback iteration differentiates the primal-dual algorithm, an a posteriori bound sets the tolerances of both, and the upper step size is adaptive. Used to learn linear operators and input-convex regularisers. Bogensperger, Ehrhardt, Pock, Salehi, and Wong, "An Adaptively Inexact Method for Bilevel Learning Using Primal–Dual-Style Differentiation", Journal of Mathematical Imaging and Vision 67(5), 2025, doi:10.1007/s10851-025-01262-w.
+
+The core of MAID is a hypergradient whose accuracy is certified rather than assumed. DeepInverse 0.4.2 has no bilevel solver, so write it with `torch.autograd` and `deepinv.optim.linear.conjugate_gradient`. The example below learns a total-variation weight: it stops the lower-level solve on the certificate, solves the Hessian system by conjugate gradient, and checks the residual itself, because that function's `tol` is relative to `‖b‖`. The printed hypergradient converges to a central finite difference of the upper loss (`0.67552`) as `eps` shrinks. MAID's contribution is choosing `eps`, and the step on `θ`, adaptively; this example fixes the sequence to show what `eps` controls.
+
+```python
+import torch
+import deepinv as dinv
+from deepinv.optim.linear import conjugate_gradient
+
+torch.manual_seed(0)
+x_true = torch.rand(1, 1, 16, 16, dtype=torch.float64)
+physics = dinv.physics.BlurFFT(
+    img_size=(1, 16, 16),
+    filter=dinv.physics.blur.gaussian_blur(sigma=1.0).double(),
+    noise_model=dinv.physics.GaussianNoise(sigma=0.05),
+)
+y = physics(x_true)
+mu, nu = 1e-2, 5e-2  # strong convexity and TV smoothing: the lower level is smooth and mu-strongly convex
+norm_A2 = float(physics.compute_sqnorm(x_true, tol=1e-6, verbose=False))
+
+
+def grad2d(x):
+    return torch.stack((torch.roll(x, -1, -1) - x, torch.roll(x, -1, -2) - x))
+
+
+def h(x, theta):  # lower level, with lambda = exp(theta)
+    tv = torch.sqrt(grad2d(x).pow(2).sum(0) + nu**2).sum()
+    return 0.5 * (physics.A(x) - y).pow(2).sum() + theta.exp() * tv + 0.5 * mu * x.pow(2).sum()
+
+
+def grad_x(x, theta, create_graph=False):
+    x = x if x.requires_grad else x.detach().requires_grad_()
+    return torch.autograd.grad(h(x, theta), x, create_graph=create_graph)[0]
+
+
+def solve_lower(theta, tol, x):
+    """Accelerated gradient until the certificate ||x - x*|| <= ||grad_x h(x)|| / mu drops below tol."""
+    L = norm_A2 + float(theta.detach().exp()) * 8 / nu + mu
+    k = (L / mu) ** 0.5
+    beta, z, x_prev = (k - 1) / (k + 1), x.clone(), x.clone()
+    while float(grad_x(x, theta).norm()) / mu > tol:
+        x_prev, x = x, (z - grad_x(z, theta) / L).detach()
+        z = x + beta * (x - x_prev)
+    return x
+
+
+def hypergradient(theta, eps, x0):
+    """Hypergradient of 0.5 ||x*(theta) - x_true||^2 from an eps-accurate lower-level solve."""
+    x = solve_lower(theta, eps, x0).requires_grad_()
+    g = grad_x(x, theta, create_graph=True)
+    hess = lambda v: torch.autograd.grad(g, x, v, retain_graph=True)[0]
+    b = (x - x_true).detach()  # gradient of the upper loss at x
+    q = conjugate_gradient(hess, b, max_iter=1000, tol=eps / float(b.norm()), parallel_dim=None)
+    residual = float((hess(q) - b).norm())  # certify the linear solve too; CG's tol is relative to ||b||
+    return float(-torch.autograd.grad(g, theta, q)[0]), x.detach(), residual
+
+
+theta = torch.tensor(-4.0, dtype=torch.float64, requires_grad=True)
+x = physics.A_adjoint(y)
+for eps in (1e-1, 1e-2, 1e-3):  # MAID chooses eps adaptively; a fixed sequence shows what it controls
+    hg, x, residual = hypergradient(theta, eps, x)
+    print(f"eps={eps:.0e}  hypergradient={hg:+.6f}  CG residual={residual:.1e}")
+```
 
 ## Checks before handing code back
 
